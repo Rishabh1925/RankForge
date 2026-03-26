@@ -114,7 +114,7 @@ export function LandingPage() {
             </Button>
           </Link>
           <Link to="/app">
-            <Button variant="outline" className="px-8 py-6 text-base rounded-xl border-[--border-subtle] text-[--text-primary] hover:bg-[--bg-tertiary]">
+            <Button variant="outline" className="px-8 py-6 text-base rounded-xl border-[--border-subtle] text-[--text-primary]">
               View Dashboard
             </Button>
           </Link>
