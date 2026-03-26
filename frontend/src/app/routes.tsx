@@ -6,6 +6,7 @@ import { KeywordAnalyzer } from "./pages/KeywordAnalyzer";
 import { History } from "./pages/History";
 import { NotFound } from "./pages/NotFound";
 import { MainLayout } from "./components/layout/MainLayout";
+import { ProtectedRoute } from "./components/layout/ProtectedRoute";
 
 export const router = createBrowserRouter([
   {
@@ -14,23 +15,29 @@ export const router = createBrowserRouter([
   },
   {
     path: "/app",
-    element: <MainLayout />,
+    element: <ProtectedRoute />,
     children: [
       {
-        index: true,
-        element: <Dashboard />,
-      },
-      {
-        path: "generate",
-        element: <BlogGenerator />,
-      },
-      {
-        path: "keywords",
-        element: <KeywordAnalyzer />,
-      },
-      {
-        path: "history",
-        element: <History />,
+        path: "",
+        element: <MainLayout />,
+        children: [
+          {
+            index: true,
+            element: <Dashboard />,
+          },
+          {
+            path: "generate",
+            element: <BlogGenerator />,
+          },
+          {
+            path: "keywords",
+            element: <KeywordAnalyzer />,
+          },
+          {
+            path: "history",
+            element: <History />,
+          },
+        ],
       },
     ],
   },

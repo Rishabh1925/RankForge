@@ -1,5 +1,6 @@
 """Base agent class for all AI agents"""
 
+import asyncio
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional
 from langchain_groq import ChatGroq
@@ -10,6 +11,9 @@ from app.utils.exceptions import AgentExecutionError
 
 logger = setup_logger(__name__)
 
+# Global semaphore to restrict concurrent LLM calls
+# Helps maintain low RAM footprint for 512MB environments like Render
+_llm_semaphore = asyncio.Semaphore(3)
 
 class BaseAgent(ABC):
     """Abstract base class for all agents in the system"""
@@ -34,7 +38,11 @@ class BaseAgent(ABC):
             temperature=self.temperature,
             max_tokens=settings.max_tokens,
             groq_api_key=settings.groq_api_key,
-            request_timeout=settings.request_timeout
+            request_timeout=settings.request_timeout,
+            model_kwargs={
+                "presence_penalty": 0.4,
+                "frequency_penalty": 0.4
+            }
         )
     
     @abstractmethod
@@ -68,14 +76,17 @@ class BaseAgent(ABC):
                 HumanMessage(content=user_prompt)
             ]
             
-            log_agent_activity(
-                self.logger, 
-                self.__class__.__name__, 
-                "Invoking LLM",
-                {"model": self.model_name}
-            )
+            self.logger.debug(f"{self.__class__.__name__}: Waiting for LLM semaphore")
             
-            response = await self.llm.ainvoke(messages)
+            async with _llm_semaphore:
+                log_agent_activity(
+                    self.logger, 
+                    self.__class__.__name__, 
+                    "Invoking LLM",
+                    {"model": self.model_name}
+                )
+                
+                response = await self.llm.ainvoke(messages)
             
             log_agent_activity(
                 self.logger,
