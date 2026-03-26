@@ -2,18 +2,62 @@
 
 from typing import List, Dict
 import re
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from app.schemas.keyword import KeywordInput, KeywordCluster, SERPGap, TrafficProjection, StrategyBrief
 from app.utils.logger import setup_logger
 from app.utils.exceptions import KeywordEngineError
+from async_lru import alru_cache
+from pytrends.request import TrendReq
 
 logger = setup_logger(__name__)
+_pytrends = TrendReq(hl='en-US', tz=360, timeout=(10,25))
+_executor = ThreadPoolExecutor(max_workers=2)
 
 
 class KeywordEngine:
     """Handles keyword clustering and strategic analysis"""
     
+    _analysis_cache: Dict[str, StrategyBrief] = {}
+    _trend_cache: Dict[str, Dict] = {}
+    
     def __init__(self):
         self.logger = logger
+    
+    async def _get_trend_data(self, keyword: str) -> dict:
+        """Fetch real Google Trends data asynchronously"""
+        if keyword in self._trend_cache:
+            return self._trend_cache[keyword]
+            
+        def fetch():
+            try:
+                self.logger.info(f"Fetching pytrends data for: {keyword}")
+                _pytrends.build_payload([keyword], cat=0, timeframe='today 1-m', geo='', gprop='')
+                interest = _pytrends.interest_over_time()
+                queries = _pytrends.related_queries()
+                
+                avg_interest = 50
+                if not interest.empty and keyword in interest.columns:
+                    avg_interest = int(interest[keyword].mean())
+                
+                related = []
+                if queries and keyword in queries and queries[keyword]['top'] is not None:
+                    related = queries[keyword]['top']['query'].tolist()[:15]
+                    
+                result = {"avg_interest": avg_interest, "related_queries": related}
+                return result
+            except Exception as e:
+                self.logger.warning(f"Pytrends fetch failed (using fallback heuristics): {e}")
+                return {"avg_interest": 50, "related_queries": []}
+                
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(_executor, fetch)
+        
+        self._trend_cache[keyword] = result
+        if len(self._trend_cache) > 100:
+            self._trend_cache.pop(next(iter(self._trend_cache)))
+            
+        return result
     
     async def analyze_keywords(self, keyword_input: KeywordInput) -> StrategyBrief:
         """
@@ -29,6 +73,11 @@ class KeywordEngine:
             KeywordEngineError: If analysis fails
         """
         try:
+            cache_key = f"{keyword_input.primary_keyword.lower().strip()}_{keyword_input.target_location}_{keyword_input.content_type}"
+            if cache_key in self._analysis_cache:
+                self.logger.info(f"Returning CACHED keyword analysis for: {keyword_input.primary_keyword}")
+                return self._analysis_cache[cache_key]
+                
             self.logger.info(f"Starting keyword analysis for: {keyword_input.primary_keyword}")
             
             # Phase 1.1: Cluster keywords
@@ -55,6 +104,11 @@ class KeywordEngine:
                 structural_requirements=structural_requirements,
                 internal_linking_opportunities=self._identify_linking_opportunities(keyword_cluster)
             )
+            
+            # Cache the result
+            self._analysis_cache[cache_key] = strategy_brief
+            if len(self._analysis_cache) > 200:
+                self._analysis_cache.pop(next(iter(self._analysis_cache)))
             
             self.logger.info("Keyword analysis completed successfully")
             return strategy_brief
@@ -179,24 +233,32 @@ class KeywordEngine:
         return max(10.0, min(90.0, base_difficulty))
     
     async def _identify_serp_gaps(self, cluster: KeywordCluster, keyword_input: KeywordInput) -> SERPGap:
-        """Identify gaps in current SERP results"""
-        # Simulate SERP gap analysis
+        """Identify gaps in current SERP results using real trend data"""
+        trend_data = await self._get_trend_data(cluster.primary)
+        real_related = trend_data["related_queries"]
+        
+        # Combine real queries with heuristic questions
+        mixed_topics = list(set([q for q in real_related if q not in cluster.primary] + cluster.related_questions))
+        
         missing_topics = [
             f"Detailed implementation guide for {cluster.primary}",
-            f"Common mistakes when using {cluster.primary}",
-            f"Advanced {cluster.primary} strategies",
-            f"{cluster.primary} case studies from {keyword_input.target_location}",
-            f"Future trends in {cluster.primary}"
+            f"Expected outcomes vs reality for {cluster.primary}",
+            f"Advanced {cluster.primary} strategies"
         ]
         
-        underserved_questions = [q for q in cluster.related_questions[:5]]
+        # Inject authentic real queries if available
+        if real_related:
+            missing_topics = [f"Complete breakdown of '{q}'" for q in real_related[:3]] + missing_topics[:2]
         
+        underserved_questions = [q for q in mixed_topics if "?" in q or any(w in q.lower() for w in ['how', 'why', 'what'])][:5]
+        if not underserved_questions:
+            underserved_questions = cluster.related_questions[:5]
+            
         content_opportunities = [
-            f"Create comprehensive FAQ section",
+            f"Address '{q}' with a dedicated section" for q in real_related[:2]
+        ] + [
             f"Include step-by-step tutorials",
-            f"Add comparison tables",
-            f"Provide downloadable resources",
-            f"Include expert quotes and statistics"
+            f"Add comparison tables"
         ]
         
         competitor_weaknesses = [
@@ -219,9 +281,14 @@ class KeywordEngine:
         )
     
     async def _project_traffic(self, cluster: KeywordCluster, keyword_input: KeywordInput) -> TrafficProjection:
-        """Project potential traffic based on keyword analysis"""
-        # Simulate traffic projection
-        base_searches = 1000
+        """Project potential traffic based on genuine keyword interest trends"""
+        
+        trend_data = await self._get_trend_data(cluster.primary)
+        avg_interest = trend_data["avg_interest"]
+        
+        # Scale base searches dynamically by Google Trends relative interest (0-100)
+        # Assuming average interest maps to ~5000 volume for a typical niche keyword
+        base_searches = max(500, int((avg_interest / 50.0) * 4500))
         
         # Adjust based on keyword characteristics
         word_count = len(cluster.primary.split())

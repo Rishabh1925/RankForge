@@ -37,6 +37,11 @@ def _get_user_id(credentials=Depends(_security)) -> Optional[str]:
     except JWTError:
         return None
 
+def get_current_user_id(user_id: Optional[str] = Depends(_get_user_id)) -> str:
+    """Strictly require authentication, returning the user_id or throwing 401."""
+    if not user_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required to perform this action")
+    return user_id
 
 def _check_api_key_error(error: Exception) -> bool:
     error_str = str(error).lower()
@@ -51,9 +56,9 @@ def _check_api_key_error(error: Exception) -> bool:
 @router.post("/generate", response_model=FinalOutput, status_code=status.HTTP_200_OK)
 async def generate_blog(
     request: GenerationRequest,
-    user_id: Optional[str] = Depends(_get_user_id),
+    user_id: str = Depends(get_current_user_id),
 ) -> FinalOutput:
-    """Run the full 3-phase pipeline and optionally persist to MongoDB."""
+    """Run the full 3-phase pipeline and persist to MongoDB."""
     logger.info(f"Generate request: {request.keyword_input.primary_keyword} | user={user_id}")
 
     try:
@@ -174,8 +179,11 @@ async def delete_history_item(item_id: str, user_id: Optional[str] = Depends(_ge
 # ── Keyword Analysis ─────────────────────────────────────────────────────────
 
 @router.post("/analyze-keywords", response_model=StrategyBrief, status_code=status.HTTP_200_OK)
-async def analyze_keywords(keyword_input: KeywordInput) -> StrategyBrief:
-    logger.info(f"Keyword analysis request: {keyword_input.primary_keyword}")
+async def analyze_keywords(
+    keyword_input: KeywordInput,
+    user_id: str = Depends(get_current_user_id)
+) -> StrategyBrief:
+    logger.info(f"Keyword analysis request: {keyword_input.primary_keyword} | user={user_id}")
     try:
         pipeline = RankForgePipeline()
         result = await pipeline.analyze_keywords_only(keyword_input)

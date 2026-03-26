@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { ArrowRight, Zap, BarChart3, Shield, Brain, Target, FileText } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { GlobalBackground } from "../components/GlobalBackground";
@@ -10,12 +10,22 @@ import type { AuthUser } from "../services/auth";
 export function LandingPage() {
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [user, setUser] = useState<AuthUser | null>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (isAuthenticated()) {
       setUser(getStoredUser());
     }
   }, []);
+
+  const handleProtectedAction = (e: React.MouseEvent, path: string) => {
+    e.preventDefault();
+    if (!isAuthenticated()) {
+      setAuthModalOpen(true);
+    } else {
+      navigate(path);
+    }
+  };
 
   const features = [
     { icon: Brain, title: "Multi-Agent Pipeline", desc: "Researcher, Writer, and Editor agents work in sequence to produce quality content." },
@@ -75,11 +85,9 @@ export function LandingPage() {
               Login / Signup
             </button>
           )}
-          <Link to="/app">
-            <Button className="btn-primary text-sm px-5 py-2 rounded-lg">
-              Get Started
-            </Button>
-          </Link>
+          <Button onClick={(e) => handleProtectedAction(e, '/app')} className="btn-primary text-sm px-5 py-2 rounded-lg">
+            Get Started
+          </Button>
         </div>
       </nav>
 
@@ -107,17 +115,13 @@ export function LandingPage() {
         </p>
 
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <Link to="/app/generate">
-            <Button className="btn-primary px-8 py-6 text-base rounded-xl">
-              Start Generating
-              <ArrowRight className="ml-2 w-4 h-4" />
-            </Button>
-          </Link>
-          <Link to="/app">
-            <Button variant="outline" className="px-8 py-6 text-base rounded-xl border-[--border-subtle] text-[--text-primary]">
-              View Dashboard
-            </Button>
-          </Link>
+          <Button onClick={(e) => handleProtectedAction(e, '/app/generate')} className="btn-primary px-8 py-6 text-base rounded-xl">
+            Start Generating
+            <ArrowRight className="ml-2 w-4 h-4" />
+          </Button>
+          <Button onClick={(e) => handleProtectedAction(e, '/app')} variant="outline" className="px-8 py-6 text-base rounded-xl border-[--border-subtle] text-[--text-primary]">
+            View Dashboard
+          </Button>
         </div>
       </section>
 
@@ -164,12 +168,10 @@ export function LandingPage() {
           <p className="text-white/70 mb-8 max-w-lg mx-auto">
             Start generating SEO-optimized blog content in minutes with the power of multi-agent AI.
           </p>
-          <Link to="/app/generate">
-            <Button className="bg-white text-[--accent-primary] hover:bg-white/90 px-8 py-6 text-base rounded-xl font-semibold">
-              Get Started - It's Free
-              <ArrowRight className="ml-2 w-4 h-4" />
-            </Button>
-          </Link>
+          <Button onClick={(e) => handleProtectedAction(e, '/app/generate')} className="bg-white text-[--accent-primary] hover:bg-white/90 px-8 py-6 text-base rounded-xl font-semibold">
+            Get Started - It's Free
+            <ArrowRight className="ml-2 w-4 h-4" />
+          </Button>
         </div>
       </section>
 

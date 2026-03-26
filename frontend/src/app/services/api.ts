@@ -260,8 +260,13 @@ export async function generateBlog(req: GenerationRequest): Promise<FinalOutput>
 }
 
 export async function analyzeKeywords(input: KeywordInput): Promise<StrategyBrief> {
+  const token = getToken();
   return request<StrategyBrief>(`${API_BASE}/analyze-keywords`, {
     method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+    },
     body: JSON.stringify(input),
   });
 }
