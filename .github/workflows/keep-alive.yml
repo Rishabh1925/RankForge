@@ -1,0 +1,31 @@
+# This GitHub Actions workflow pings the Render backend every 14 minutes
+# to prevent it from spinning down on the free tier.
+
+name: Keep Render Backend Alive
+
+on:
+  schedule:
+    # Runs every 14 minutes (Render spins down after 15 mins of inactivity)
+    - cron: '*/14 * * * *'
+  workflow_dispatch: # Allows manual trigger
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Ping Backend Health Endpoint
+        run: |
+          echo "Pinging backend at ${{ secrets.RENDER_BACKEND_URL }}/api/v1/health"
+          response=$(curl -sS -o /dev/null -w "%{http_code}" ${{ secrets.RENDER_BACKEND_URL }}/api/v1/health)
+          echo "Response code: $response"
+          
+          if [ "$response" -eq 200 ]; then
+            echo "✅ Backend is alive and healthy"
+          else
+            echo "⚠️ Backend returned status code: $response"
+          fi
+      
+      - name: Log Timestamp
+        run: |
+          echo "Last ping: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
