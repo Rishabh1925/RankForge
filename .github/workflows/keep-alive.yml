@@ -5,8 +5,9 @@ name: Keep Render Backend Alive
 
 on:
   schedule:
-    # Runs every 14 minutes (Render spins down after 15 mins of inactivity)
-    - cron: '*/14 * * * *'
+    # Multiple schedules for reliability (GitHub Actions can be inconsistent)
+    # Runs at :00, :10, :20, :30, :40, :50 of every hour
+    - cron: '0,10,20,30,40,50 * * * *'
   workflow_dispatch: # Allows manual trigger
 
 jobs:
